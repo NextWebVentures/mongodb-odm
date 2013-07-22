@@ -19,9 +19,9 @@
 namespace Doctrine\ODM\MongoDB\Persisters;
 
 use Doctrine\ODM\MongoDB\DocumentManager;
-use Doctrine\ODM\MongoDB\UnitOfWork;
 use Doctrine\ODM\MongoDB\Mapping\ClassMetadata;
-use Doctrine\ODM\MongoDB\Mapping\Types\Type;
+use Doctrine\ODM\MongoDB\Types\Type;
+use Doctrine\ODM\MongoDB\UnitOfWork;
 
 /**
  * PersistenceBuilder builds the queries used by the persisters to update and insert
@@ -36,22 +36,23 @@ class PersistenceBuilder
     /**
      * The DocumentManager instance.
      *
-     * @var Doctrine\ODM\MongoDB\DocumentManager
+     * @var DocumentManager
      */
     private $dm;
 
     /**
      * The UnitOfWork instance.
      *
-     * @var Doctrine\ODM\MongoDB\UnitOfWork
+     * @var UnitOfWork
      */
     private $uow;
 
     /**
      * Initializes a new PersistenceBuilder instance.
      *
-     * @param Doctrine\ODM\MongoDB\DocumentManager $dm
-     * @param Doctrine\ODM\MongoDB\UnitOfWork $uow
+     * @param DocumentManager $dm
+     * @param UnitOfWork $uow
+     * @param string $cmd
      */
     public function __construct(DocumentManager $dm, UnitOfWork $uow, $cmd)
     {
@@ -172,7 +173,13 @@ class PersistenceBuilder
 
             // @Inc
             if ($mapping['type'] === 'increment') {
-                if ($new >= $old) {
+                if ($new === null) {
+                    if ($mapping['nullable'] === true) {
+                        $updateData[$this->cmd . 'set'][$mapping['name']] = null;
+                    } else {
+                        $updateData[$this->cmd . 'unset'][$mapping['name']] = true;
+                    }
+                } elseif ($new >= $old) {
                     $updateData[$this->cmd . 'inc'][$mapping['name']] = $new - $old;
                 } else {
                     $updateData[$this->cmd . 'inc'][$mapping['name']] = ($old - $new) * -1;
@@ -208,12 +215,14 @@ class PersistenceBuilder
 
             // @EmbedMany
             } elseif (isset($mapping['association']) && $mapping['association'] === ClassMetadata::EMBED_MANY) {
-                foreach ($new as $key => $embeddedDoc) {
-                    if ( ! $this->uow->isScheduledForInsert($embeddedDoc)) {
-                        $update = $this->prepareUpdateData($embeddedDoc);
-                        foreach ($update as $cmd => $values) {
-                            foreach ($values as $name => $value) {
-                                $updateData[$cmd][$mapping['name'] . '.' . $key . '.' . $name] = $value;
+                if (null !== $new) {
+                    foreach ($new as $key => $embeddedDoc) {
+                        if ( ! $this->uow->isScheduledForInsert($embeddedDoc)) {
+                            $update = $this->prepareUpdateData($embeddedDoc);
+                            foreach ($update as $cmd => $values) {
+                                foreach ($values as $name => $value) {
+                                    $updateData[$cmd][$mapping['name'] . '.' . $key . '.' . $name] = $value;
+                                }
                             }
                         }
                     }
@@ -413,6 +422,10 @@ class PersistenceBuilder
         return $embeddedDocumentValue;
     }
 
+    /**
+     * @param object $document
+     * @return boolean
+     */
     private function isScheduledForInsert($document)
     {
         return $this->uow->isScheduledForInsert($document)

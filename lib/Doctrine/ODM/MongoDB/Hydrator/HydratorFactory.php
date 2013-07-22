@@ -19,17 +19,15 @@
 
 namespace Doctrine\ODM\MongoDB\Hydrator;
 
-use Doctrine\ODM\MongoDB\Mapping\ClassMetadata;
-use Doctrine\ODM\MongoDB\DocumentManager;
-use Doctrine\ODM\MongoDB\Mapping\Types\Type;
-use Doctrine\ODM\MongoDB\UnitOfWork;
-use Doctrine\ODM\MongoDB\Events;
 use Doctrine\Common\EventManager;
+use Doctrine\ODM\MongoDB\DocumentManager;
 use Doctrine\ODM\MongoDB\Event\LifecycleEventArgs;
 use Doctrine\ODM\MongoDB\Event\PreLoadEventArgs;
-use Doctrine\ODM\MongoDB\PersistentCollection;
-use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\ODM\MongoDB\Events;
+use Doctrine\ODM\MongoDB\Mapping\ClassMetadata;
 use Doctrine\ODM\MongoDB\Proxy\Proxy;
+use Doctrine\ODM\MongoDB\Types\Type;
+use Doctrine\ODM\MongoDB\UnitOfWork;
 
 /**
  * The HydratorFactory class is responsible for instantiating a correct hydrator
@@ -43,21 +41,21 @@ class HydratorFactory
     /**
      * The DocumentManager this factory is bound to.
      *
-     * @var Doctrine\ODM\MongoDB\DocumentManager
+     * @var \Doctrine\ODM\MongoDB\DocumentManager
      */
     private $dm;
 
     /**
      * The UnitOfWork used to coordinate object-level transactions.
      *
-     * @var Doctrine\ODM\MongoDB\UnitOfWork
+     * @var \Doctrine\ODM\MongoDB\UnitOfWork
      */
     private $unitOfWork;
 
     /**
      * The EventManager associated with this Hydrator
      *
-     * @var Doctrine\Common\EventManager
+     * @var \Doctrine\Common\EventManager
      */
     private $evm;
 
@@ -91,10 +89,20 @@ class HydratorFactory
 
     /**
      * Mongo command prefix
+     *
      * @var string
      */
     private $cmd;
 
+    /**
+     * @param DocumentManager $dm
+     * @param EventManager $evm
+     * @param string $hydratorDir
+     * @param string $hydratorNs
+     * @param boolean $autoGenerate
+     * @param string $cmd
+     * @throws HydratorException
+     */
     public function __construct(DocumentManager $dm, EventManager $evm, $hydratorDir, $hydratorNs, $autoGenerate, $cmd)
     {
         if ( ! $hydratorDir) {
@@ -103,12 +111,12 @@ class HydratorFactory
         if ( ! $hydratorNs) {
             throw HydratorException::hydratorNamespaceRequired();
         }
-        $this->dm                = $dm;
-        $this->evm               = $evm;
-        $this->hydratorDir       = $hydratorDir;
+        $this->dm = $dm;
+        $this->evm = $evm;
+        $this->hydratorDir = $hydratorDir;
         $this->hydratorNamespace = $hydratorNs;
-        $this->autoGenerate      = $autoGenerate;
-        $this->cmd               = $cmd;
+        $this->autoGenerate = $autoGenerate;
+        $this->cmd = $cmd;
     }
 
     /**
@@ -125,7 +133,7 @@ class HydratorFactory
      * Gets the hydrator object for the given document class.
      *
      * @param string $className
-     * @return Doctrine\ODM\MongoDB\Hydrator\HydratorInterface $hydrator
+     * @return \Doctrine\ODM\MongoDB\Hydrator\HydratorInterface $hydrator
      */
     public function getHydratorFor($className)
     {
@@ -136,7 +144,7 @@ class HydratorFactory
         $fqn = $this->hydratorNamespace . '\\' . $hydratorClassName;
         $class = $this->dm->getClassMetadata($className);
 
-        if (! class_exists($fqn, false)) {
+        if ( ! class_exists($fqn, false)) {
             $fileName = $this->hydratorDir . DIRECTORY_SEPARATOR . $hydratorClassName . '.php';
             if ($this->autoGenerate) {
                 $this->generateHydratorClass($class, $hydratorClassName, $fileName);
@@ -166,6 +174,11 @@ class HydratorFactory
         }
     }
 
+    /**
+     * @param ClassMetadata $class
+     * @param string $hydratorClassName
+     * @param string $fileName
+     */
     private function generateHydratorClass(ClassMetadata $class, $hydratorClassName, $fileName)
     {
         $code = '';
@@ -176,11 +189,13 @@ class HydratorFactory
                     $code .= sprintf(<<<EOF
 
         /** @AlsoLoad("$name") */
-        if (isset(\$data['$name'])) {
-            \$data['$fieldName'] = \$data['$name'];
+        if (!array_key_exists('%1\$s', \$data) && array_key_exists('$name', \$data)) {
+            \$data['%1\$s'] = \$data['$name'];
         }
 
 EOF
+                        ,
+                        $mapping['name']
                     );
                 }
             }
@@ -197,7 +212,7 @@ EOF
         }
 
 EOF
-                ,
+                    ,
                     $mapping['name'],
                     $mapping['fieldName'],
                     Type::getType($mapping['type'])->closureToPHP()
@@ -216,7 +231,7 @@ EOF
         }
 
 EOF
-                ,
+                    ,
                     $mapping['name'],
                     $mapping['fieldName'],
                     Type::getType($mapping['type'])->closureToPHP()
@@ -242,7 +257,7 @@ EOF
         }
 
 EOF
-                ,
+                    ,
                     $mapping['name'],
                     $mapping['fieldName']
                 );
@@ -256,11 +271,11 @@ EOF
         \$hydratedData['%2\$s'] = \$return;
 
 EOF
-                ,
-                    $mapping['name'],
-                    $mapping['fieldName'],
-                    $mapping['repositoryMethod']
-                );
+                        ,
+                        $mapping['name'],
+                        $mapping['fieldName'],
+                        $mapping['repositoryMethod']
+                    );
                 } else {
                     $code .= sprintf(<<<EOF
 
@@ -271,7 +286,7 @@ EOF
         \$mappedByFieldName = isset(\$mappedByMapping['simple']) && \$mappedByMapping['simple'] ? \$mapping['mappedBy'] : \$mapping['mappedBy'].'.\$id';
         \$criteria = array_merge(
             array(\$mappedByFieldName => \$data['_id']),
-            isset(\$this->class->fieldMappings['%2\$s']['criteria']) ? \$this->class->fieldMappings['%2\$s']['criteria'] : array() 
+            isset(\$this->class->fieldMappings['%2\$s']['criteria']) ? \$this->class->fieldMappings['%2\$s']['criteria'] : array()
         );
         \$sort = isset(\$this->class->fieldMappings['%2\$s']['sort']) ? \$this->class->fieldMappings['%2\$s']['sort'] : array();
         \$return = \$this->unitOfWork->getDocumentPersister(\$className)->load(\$criteria, null, array(), 0, \$sort);
@@ -279,7 +294,7 @@ EOF
         \$hydratedData['%2\$s'] = \$return;
 
 EOF
-                    ,
+                        ,
                         $mapping['name'],
                         $mapping['fieldName']
                     );
@@ -300,7 +315,7 @@ EOF
         \$hydratedData['%2\$s'] = \$return;
 
 EOF
-                ,
+                    ,
                     $mapping['name'],
                     $mapping['fieldName']
                 );
@@ -323,7 +338,7 @@ EOF
         }
 
 EOF
-                ,
+                    ,
                     $mapping['name'],
                     $mapping['fieldName']
                 );
@@ -365,8 +380,8 @@ class $hydratorClassName implements HydratorInterface
     }
 }
 EOF
-          ,
-          $code
+            ,
+            $code
         );
 
         file_put_contents($fileName, $code);

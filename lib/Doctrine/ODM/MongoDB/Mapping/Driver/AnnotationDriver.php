@@ -93,7 +93,7 @@ class AnnotationDriver extends AbstractAnnotationDriver
 
         }
 
-        if (!$documentAnnots) {
+        if ( ! $documentAnnots) {
             throw MappingException::classIsNotAValidDocument($className);
         }
 
@@ -128,7 +128,7 @@ class AnnotationDriver extends AbstractAnnotationDriver
         }
 
         foreach ($reflClass->getProperties() as $property) {
-            if ($class->isMappedSuperclass && !$property->isPrivate() || $class->isInheritedField($property->name)) {
+            if ($class->isMappedSuperclass && ! $property->isPrivate()) {
                 continue;
             }
 
@@ -222,9 +222,9 @@ class AnnotationDriver extends AbstractAnnotationDriver
      * @param Reader $reader
      * @return AnnotationDriver
      */
-    static public function create($paths = array(), Reader $reader = null)
+    public static function create($paths = array(), Reader $reader = null)
     {
-        if ($reader == null) {
+        if ($reader === null) {
             $reader = new AnnotationReader();
         }
         return new self($reader, $paths);

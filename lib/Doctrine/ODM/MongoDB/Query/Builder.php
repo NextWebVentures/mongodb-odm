@@ -42,9 +42,17 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
     /**
      * The ClassMetadata instance.
      *
-     * @var ClassMetadata
+     * @var \Doctrine\ODM\MongoDB\Mapping\ClassMetadata
      */
     private $class;
+
+    /**
+     * The current field we are operating on.
+     *
+     * @todo Change this to private once ODM requires doctrine/mongodb 1.1+
+     * @var string
+     */
+    protected $currentField;
 
     /**
      * Whether or not to hydrate the data to documents.
@@ -74,11 +82,18 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
      */
     private $requireIndexes;
 
+    /**
+     * Construct a Builder
+     *
+     * @param DocumentManager $dm
+     * @param string $cmd
+     * @param string[]|string|null $documentName (optional) an array of document names, the document name, or none
+     */
     public function __construct(DocumentManager $dm, $cmd, $documentName = null)
     {
-        $this->dm   = $dm;
+        $this->dm = $dm;
         $this->expr = new Expr($dm, $cmd);
-        $this->cmd  = $cmd;
+        $this->cmd = $cmd;
         if ($documentName !== null) {
             $this->setDocumentName($documentName);
         }
@@ -97,6 +112,18 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
     }
 
     /**
+     * Set the current field to operate on.
+     *
+     * @param string $field
+     * @return self
+     */
+    public function field($field)
+    {
+        $this->currentField = $field;
+        return parent::field($field);
+    }
+
+    /**
      * Use a primer to load the current fields referenced data efficiently.
      *
      *     $qb->field('user')->prime(true);
@@ -104,7 +131,7 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
      *         // do something that will prime all the associated users in one query
      *     });
      *
-     * @param Closure|boolean $primer
+     * @param \Closure|boolean $primer
      * @return Builder
      */
     public function prime($primer = true)
@@ -155,6 +182,10 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
         return parent::findAndUpdate();
     }
 
+    /**
+     * @param bool $bool
+     * @return self
+     */
     public function returnNew($bool = true)
     {
         $this->refresh(true);
@@ -202,7 +233,7 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
     }
 
     /**
-     * @param $document
+     * @param object $document
      * @return Builder
      */
     public function references($document)
@@ -212,7 +243,7 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
     }
 
     /**
-     * @param $document
+     * @param object $document
      * @return Builder
      */
     public function includesReferenceTo($document)
@@ -225,7 +256,7 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
      * Gets the Query executable.
      *
      * @param array $options
-     * @return QueryInterface $query
+     * @return Query $query
      */
     public function getQuery(array $options = array())
     {
@@ -233,13 +264,19 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
             $this->hydrate = false;
         }
 
+        $documentPersister = $this->dm->getUnitOfWork()->getDocumentPersister($this->class->name);
+
         $query = $this->query;
 
         $query['query'] = $this->expr->getQuery();
+        $query['query'] = $documentPersister->addFilterToPreparedQuery($query['query']);
+        $query['query'] = $documentPersister->addDiscriminatorToPreparedQuery($query['query']);
+
         $query['newObj'] = $this->expr->getNewObj();
-        $query['sort'] = $this->dm->getUnitOfWork()
-            ->getDocumentPersister($this->class->name)
-            ->prepareSort($query['sort']);
+
+        $query['select'] = $documentPersister->prepareSortOrProjection($query['select']);
+
+        $query['sort'] = $documentPersister->prepareSortOrProjection($query['sort']);
 
         if ($this->class->slaveOkay) {
             $query['slaveOkay'] = $this->class->slaveOkay;
@@ -261,9 +298,9 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
     }
 
     /**
-     * Create a new Query\Expr instance that can be used as an expression with the QueryBuilder
+     * Create a new Expr instance that can be used as an expression with the Builder
      *
-     * @return Query\Expr $expr
+     * @return Expr $expr
      */
     public function expr()
     {
@@ -273,6 +310,9 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
         return $expr;
     }
 
+    /**
+     * @param string[]|string $documentName an array of document names or just one.
+     */
     private function setDocumentName($documentName)
     {
         if (is_array($documentName)) {
@@ -294,6 +334,13 @@ class Builder extends \Doctrine\MongoDB\Query\Builder
         }
     }
 
+    /**
+     * Get Discriminator Values
+     *
+     * @param \Iterator|array $classNames
+     * @return array an array of discriminatorValues (mixed type)
+     * @throws \InvalidArgumentException if the number of found collections > 1
+     */
     private function getDiscriminatorValues($classNames)
     {
         $discriminatorValues = array();

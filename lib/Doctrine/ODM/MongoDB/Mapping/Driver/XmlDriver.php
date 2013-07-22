@@ -48,7 +48,7 @@ class XmlDriver extends FileDriver
     public function loadMetadataForClass($className, ClassMetadata $class)
     {
         /* @var $class ClassMetadataInfo */
-        /* @var $xmlRoot SimpleXMLElement */
+        /* @var $xmlRoot \SimpleXMLElement */
         $xmlRoot = $this->getElement($className);
         if ( ! $xmlRoot) {
             return;
@@ -74,8 +74,7 @@ class XmlDriver extends FileDriver
             $class->setInheritanceType(constant('Doctrine\ODM\MongoDB\Mapping\ClassMetadata::INHERITANCE_TYPE_' . $inheritanceType));
         }
         if (isset($xmlRoot['change-tracking-policy'])) {
-            $class->setChangeTrackingPolicy(constant('Doctrine\ODM\MongoDB\Mapping\ClassMetadata::CHANGETRACKING_'
-                    . strtoupper((string)$xmlRoot['change-tracking-policy'])));
+            $class->setChangeTrackingPolicy(constant('Doctrine\ODM\MongoDB\Mapping\ClassMetadata::CHANGETRACKING_' . strtoupper((string) $xmlRoot['change-tracking-policy'])));
         }
         if (isset($xmlRoot->{'discriminator-field'})) {
             $discrField = $xmlRoot->{'discriminator-field'};
@@ -92,15 +91,15 @@ class XmlDriver extends FileDriver
             $class->setDiscriminatorMap($map);
         }
         if (isset($xmlRoot->{'indexes'})) {
-            foreach($xmlRoot->{'indexes'}->{'index'} as $index) {
+            foreach ($xmlRoot->{'indexes'}->{'index'} as $index) {
                 $this->addIndex($class, $index);
             }
         }
         if (isset($xmlRoot->{'require-indexes'})) {
-            $class->setRequireIndexes((bool) $xmlRoot->{'require-indexes'});
+            $class->setRequireIndexes((boolean) $xmlRoot->{'require-indexes'});
         }
         if (isset($xmlRoot->{'slave-okay'})) {
-            $class->setSlaveOkay((bool) $xmlRoot->{'slave-okay'});
+            $class->setSlaveOkay((boolean) $xmlRoot->{'slave-okay'});
         }
         if (isset($xmlRoot->field)) {
             foreach ($xmlRoot->field as $field) {
@@ -112,6 +111,12 @@ class XmlDriver extends FileDriver
                     if (in_array($key, $booleanAttributes)) {
                         $mapping[$key] = ('true' === $mapping[$key]) ? true : false;
                     }
+                }
+                if (isset($attributes['not-saved'])) {
+                    $mapping['notSaved'] = ('true' === $attributes['not-saved']) ? true : false;
+                }
+                if (isset($attributes['also-load'])) {
+                    $mapping['alsoLoadFields'] = explode(',', $attributes['also-load']);
                 }
                 $this->addFieldMapping($class, $mapping);
             }
@@ -220,6 +225,12 @@ class XmlDriver extends FileDriver
                 $mapping['discriminatorMap'][(string) $attr['value']] = (string) $attr['class'];
             }
         }
+        if (isset($attributes['not-saved'])) {
+            $mapping['notSaved'] = ('true' === $attributes['not-saved']) ? true : false;
+        }
+        if (isset($attributes['also-load'])) {
+            $mapping['alsoLoadFields'] = explode(',', $attributes['also-load']);
+        }
         $this->addFieldMapping($class, $mapping);
     }
 
@@ -269,6 +280,12 @@ class XmlDriver extends FileDriver
                 $attr = $criteria->attributes();
                 $mapping['criteria'][(string) $attr['field']] = (string) $attr['value'];
             }
+        }
+        if (isset($attributes['not-saved'])) {
+            $mapping['notSaved'] = ('true' === $attributes['not-saved']) ? true : false;
+        }
+        if (isset($attributes['also-load'])) {
+            $mapping['alsoLoadFields'] = explode(',', $attributes['also-load']);
         }
         $this->addFieldMapping($class, $mapping);
     }

@@ -64,7 +64,7 @@ EOT
      */
     protected function execute(Console\Input\InputInterface $input, Console\Output\OutputInterface $output)
     {
-        $dm = $this->getHelper('dm')->getDocumentManager();
+        $dm = $this->getHelper('documentManager')->getDocumentManager();
         
         $metadatas = $dm->getMetadataFactory()->getAllMetadata();
         $metadatas = MetadataFilter::filter($metadatas, $input->getOption('filter'));
@@ -84,7 +84,7 @@ EOT
             throw new \InvalidArgumentException(
                 sprintf("Proxies destination directory '<info>%s</info>' does not exist.", $destPath)
             );
-        } else if ( ! is_writable($destPath)) {
+        } elseif ( ! is_writable($destPath)) {
             throw new \InvalidArgumentException(
                 sprintf("Proxies destination directory '<info>%s</info>' does not have write permissions.", $destPath)
             );
